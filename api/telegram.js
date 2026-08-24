@@ -39,11 +39,7 @@ async function downloadTelegramFileAsBase64(fileId) {
 async function saveTelegramFile(fileId, path) {
 	const file = await telegram('getFile', { file_id: fileId });
 	if (!file.ok || !file.result?.file_path) {
-		const desc = file.description || 'Unknown error';
-		if (desc.toLowerCase().includes('too big') || desc.toLowerCase().includes('file is too big')) {
-			throw new Error('Telegram Bot API limit: File is larger than 20MB. Please upload an APK smaller than 20MB.');
-		}
-		throw new Error(`Telegram file lookup failed: ${desc}`);
+		throw new Error(`Telegram file lookup failed: ${file.description || 'Unknown error'}`);
 	}
 	const download = await fetch(`https://api.telegram.org/file/bot${token}/${file.result.file_path}`);
 	if (!download.ok) throw new Error(`Telegram file download failed: ${download.statusText}`);
@@ -92,34 +88,24 @@ function generateProjectSlug(value) {
 }
 
 const vercelToken = process.env.VERCEL_TOKEN;
-let cachedTeamId = process.env.VERCEL_TEAM_ID || null;
+let cachedTeamId = process.env.VERCEL_TEAM_ID || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
 
 async function getTeamId() {
-	if (cachedTeamId !== null && cachedTeamId !== undefined) return cachedTeamId;
+	if (cachedTeamId) return cachedTeamId;
 	if (!vercelToken) return null;
 	try {
-		const res = await fetch('https://api.vercel.com/v9/projects', {
+		const res = await fetch('https://api.vercel.com/v2/user', {
 			headers: { Authorization: `Bearer ${vercelToken}` },
 		});
 		if (res.ok) {
 			const data = await res.json();
-			const firstProject = data.projects?.[0];
-			cachedTeamId = firstProject?.accountId || firstProject?.teamId || null;
-			return cachedTeamId;
-		}
-		const userRes = await fetch('https://api.vercel.com/v2/user', {
-			headers: { Authorization: `Bearer ${vercelToken}` },
-		});
-		if (userRes.ok) {
-			const userData = await userRes.json();
-			cachedTeamId = userData.user?.defaultTeamId || null;
+			cachedTeamId = data.user?.defaultTeamId || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
 			return cachedTeamId;
 		}
 	} catch (e) {
 		console.error('Could not fetch user team ID:', e);
 	}
-	cachedTeamId = null;
-	return null;
+	return 'team_cZIUTShiGmqZiIaDKEQLi8nF';
 }
 
 async function createVercelProject(name) {
@@ -285,11 +271,11 @@ export default async function handler(request, response) {
 
 			const appName = session.data.name || 'abcde';
 			const slug = generateProjectSlug(appName);
-			await telegram('sendMessage', { 
-				chat_id: chatId, 
-				text: '⏳ Uploading APK & creating standalone domain shortly.' 
+			await telegram('sendMessage', {
+				chat_id: chatId,
+				text: '⏳ Uploading APK & creating standalone domain shortly.'
 			});
-			
+
 			// Save APK permanently under the unique project slug
 			session.data.apkUrl = await saveTelegramFile(message.document.file_id, `apps/${slug}/base.apk`);
 			const host = request.headers.host || 'playstore-web-143.vercel.app';
@@ -300,7 +286,7 @@ export default async function handler(request, response) {
 			if (!logoUrl && session.data.logoFileId) {
 				try {
 					logoUrl = await downloadTelegramFileAsBase64(session.data.logoFileId);
-				} catch (e) {}
+				} catch (e) { }
 			}
 			if (!logoUrl) {
 				// Check if user's chat logo exists in blob store
@@ -314,13 +300,13 @@ export default async function handler(request, response) {
 							logoUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
 						}
 					}
-				} catch (e) {}
+				} catch (e) { }
 			}
 
 			if (session.data.logoFileId) {
 				try {
 					await saveTelegramFile(session.data.logoFileId, `apps/${slug}/logo`);
-				} catch (e) {}
+				} catch (e) { }
 			}
 
 			const appRecord = {
@@ -373,7 +359,7 @@ export default async function handler(request, response) {
 			try {
 				if (blobToken) options.token = blobToken;
 				await del(`sessions/${chatId}.json`, options);
-			} catch {}
+			} catch { }
 
 			return response.status(200).json({ ok: true });
 		}

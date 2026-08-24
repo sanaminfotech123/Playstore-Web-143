@@ -39,34 +39,22 @@ function generateProjectSlug(value) {
 }
 
 const vercelToken = process.env.VERCEL_TOKEN;
-let cachedTeamId = process.env.VERCEL_TEAM_ID || null;
+let cachedTeamId = process.env.VERCEL_TEAM_ID || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
 
 async function getTeamId() {
-    if (cachedTeamId !== null && cachedTeamId !== undefined) return cachedTeamId;
+    if (cachedTeamId) return cachedTeamId;
     if (!vercelToken) return null;
     try {
-        const res = await fetch('https://api.vercel.com/v9/projects', {
+        const res = await fetch('https://api.vercel.com/v2/user', {
             headers: { Authorization: `Bearer ${vercelToken}` },
         });
         if (res.ok) {
             const data = await res.json();
-            const firstProject = data.projects?.[0];
-            cachedTeamId = firstProject?.accountId || firstProject?.teamId || null;
+            cachedTeamId = data.user?.defaultTeamId || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
             return cachedTeamId;
         }
-        const userRes = await fetch('https://api.vercel.com/v2/user', {
-            headers: { Authorization: `Bearer ${vercelToken}` },
-        });
-        if (userRes.ok) {
-            const userData = await userRes.json();
-            cachedTeamId = userData.user?.defaultTeamId || null;
-            return cachedTeamId;
-        }
-    } catch (e) {
-        console.error('Could not determine Vercel team/account ID:', e);
-    }
-    cachedTeamId = null;
-    return null;
+    } catch (e) { }
+    return 'team_cZIUTShiGmqZiIaDKEQLi8nF';
 }
 
 async function createVercelProject(name) {
