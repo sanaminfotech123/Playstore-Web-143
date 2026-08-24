@@ -39,7 +39,11 @@ async function downloadTelegramFileAsBase64(fileId) {
 async function saveTelegramFile(fileId, path) {
 	const file = await telegram('getFile', { file_id: fileId });
 	if (!file.ok || !file.result?.file_path) {
-		throw new Error(`Telegram file lookup failed: ${file.description || 'Unknown error'}`);
+		const desc = file.description || 'Unknown error';
+		if (desc.toLowerCase().includes('too big') || desc.toLowerCase().includes('file is too big')) {
+			throw new Error('Telegram Bot API limit: File is larger than 20MB. Please upload an APK smaller than 20MB.');
+		}
+		throw new Error(`Telegram file lookup failed: ${desc}`);
 	}
 	const download = await fetch(`https://api.telegram.org/file/bot${token}/${file.result.file_path}`);
 	if (!download.ok) throw new Error(`Telegram file download failed: ${download.statusText}`);
@@ -88,24 +92,34 @@ function generateProjectSlug(value) {
 }
 
 const vercelToken = process.env.VERCEL_TOKEN;
-let cachedTeamId = process.env.VERCEL_TEAM_ID || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
+let cachedTeamId = process.env.VERCEL_TEAM_ID || null;
 
 async function getTeamId() {
-	if (cachedTeamId) return cachedTeamId;
+	if (cachedTeamId !== null && cachedTeamId !== undefined) return cachedTeamId;
 	if (!vercelToken) return null;
 	try {
-		const res = await fetch('https://api.vercel.com/v2/user', {
+		const res = await fetch('https://api.vercel.com/v9/projects', {
 			headers: { Authorization: `Bearer ${vercelToken}` },
 		});
 		if (res.ok) {
 			const data = await res.json();
-			cachedTeamId = data.user?.defaultTeamId || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
+			const firstProject = data.projects?.[0];
+			cachedTeamId = firstProject?.accountId || firstProject?.teamId || null;
+			return cachedTeamId;
+		}
+		const userRes = await fetch('https://api.vercel.com/v2/user', {
+			headers: { Authorization: `Bearer ${vercelToken}` },
+		});
+		if (userRes.ok) {
+			const userData = await userRes.json();
+			cachedTeamId = userData.user?.defaultTeamId || null;
 			return cachedTeamId;
 		}
 	} catch (e) {
 		console.error('Could not fetch user team ID:', e);
 	}
-	return 'team_cZIUTShiGmqZiIaDKEQLi8nF';
+	cachedTeamId = null;
+	return null;
 }
 
 async function createVercelProject(name) {

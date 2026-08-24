@@ -22,6 +22,11 @@ from telegram.ext import (
 NAME, LOGO, APK = range(3)
 UPLOADS = Path("uploads")
 
+import warnings
+from telegram.warnings import PTBUserWarning
+
+warnings.filterwarnings("ignore", category=PTBUserWarning)
+
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
