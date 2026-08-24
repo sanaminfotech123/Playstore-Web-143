@@ -83,29 +83,38 @@ function generateProjectSlug(value) {
 		.replace(/^-+|-+$/g, '')
 		.slice(0, 20) || 'app';
 	const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-	const rand = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+	const rand = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 	return `${clean}-${rand}`;
 }
 
 const vercelToken = process.env.VERCEL_TOKEN;
-let cachedTeamId = process.env.VERCEL_TEAM_ID || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
+let cachedTeamId = process.env.VERCEL_TEAM_ID || null;
 
 async function getTeamId() {
 	if (cachedTeamId) return cachedTeamId;
 	if (!vercelToken) return null;
 	try {
-		const res = await fetch('https://api.vercel.com/v2/user', {
+		const res = await fetch('https://api.vercel.com/v9/projects', {
 			headers: { Authorization: `Bearer ${vercelToken}` },
 		});
 		if (res.ok) {
 			const data = await res.json();
-			cachedTeamId = data.user?.defaultTeamId || 'team_cZIUTShiGmqZiIaDKEQLi8nF';
+			const first = data.projects?.[0];
+			cachedTeamId = first?.accountId || first?.teamId || null;
+			if (cachedTeamId) return cachedTeamId;
+		}
+		const userRes = await fetch('https://api.vercel.com/v2/user', {
+			headers: { Authorization: `Bearer ${vercelToken}` },
+		});
+		if (userRes.ok) {
+			const userData = await userRes.json();
+			cachedTeamId = userData.user?.defaultTeamId || null;
 			return cachedTeamId;
 		}
 	} catch (e) {
 		console.error('Could not fetch user team ID:', e);
 	}
-	return 'team_cZIUTShiGmqZiIaDKEQLi8nF';
+	return null;
 }
 
 async function createVercelProject(name) {
