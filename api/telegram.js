@@ -230,7 +230,7 @@ export default async function handler(request, response) {
 			await saveSession(chatId, { step: 'name', data: {} });
 			await telegram('sendMessage', {
 				chat_id: chatId,
-				text: '✅ Process started\n\n1/3 App ka naam Bhejiye (e.g. abcde).',
+				text: '✅ Process started\n\n1/3 App ka naam Bhejiye (e.g. abcde,qwert).',
 			});
 			return response.status(200).json({ ok: true });
 		}
@@ -282,7 +282,7 @@ export default async function handler(request, response) {
 			const slug = generateProjectSlug(appName);
 			await telegram('sendMessage', {
 				chat_id: chatId,
-				text: '⏳ Uploading APK & creating standalone domain shortly.'
+				text: '⏳ Uploading APK & creating standalone domain shortly .'
 			});
 
 			// Save APK permanently under the unique project slug
