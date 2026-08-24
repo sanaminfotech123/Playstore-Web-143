@@ -164,16 +164,43 @@ export default async function handler(request, response) {
 
         // Build self-contained HTML page and deploy directly to Vercel subdomain
         if (process.env.VERCEL_TOKEN) {
-            const html = buildStandaloneHtml(app);
-            await createVercelProject(projectName);
-            const deployment = await deployProject(projectName, html);
+            let finalUrl = `https://${projectName}.vercel.app`;
+            const teamId = await getTeamId();
+            let deployed = false;
 
-            if (deployment?.id) {
-                await waitForDeploymentReady(deployment.id);
+            try {
+                const html = buildStandaloneHtml(app);
+                await createVercelProject(projectName);
+                const deployment = await deployProject(projectName, html);
+                if (deployment?.id) {
+                    await waitForDeploymentReady(deployment.id);
+                }
+                deployed = true;
+            } catch (deployErr) {
+                console.warn('Standalone deploy skipped/failed:', deployErr.message);
             }
 
-            const finalSubdomainUrl = `https://${projectName}.vercel.app`;
-            return response.status(200).json({ ok: true, url: finalSubdomainUrl, slug: projectName });
+            if (!deployed) {
+                try {
+                    const domainEndpoint = teamId
+                        ? `https://api.vercel.com/v10/projects/playstore-web-143/domains?teamId=${encodeURIComponent(teamId)}`
+                        : 'https://api.vercel.com/v10/projects/playstore-web-143/domains';
+                    const domainRes = await fetch(domainEndpoint, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
+                        body: JSON.stringify({ name: `${projectName}.vercel.app` }),
+                    });
+                    if (domainRes.ok || domainRes.status === 409) {
+                        deployed = true;
+                    }
+                } catch (aliasErr) {
+                    console.error('Domain alias failed in publish:', aliasErr);
+                }
+            }
+
+            if (deployed) {
+                return response.status(200).json({ ok: true, url: finalUrl, slug: projectName });
+            }
         }
 
         // Fallback URL if VERCEL_TOKEN missing

@@ -335,15 +335,43 @@ export default async function handler(request, response) {
 
 			let liveUrl = `https://${slug}.vercel.app`;
 
-			// Deploy standalone project to Vercel (e.g. https://abcde-qjoa.vercel.app)
+			// Deploy standalone project or register domain alias on Vercel
 			if (vercelToken) {
+				const teamId = await getTeamId();
+				let deployed = false;
+
+				// 1. Try standalone project deployment
 				try {
 					const html = buildStandaloneHtml(appRecord);
 					await createVercelProject(slug);
 					await deployProject(slug, html);
 					liveUrl = `https://${slug}.vercel.app`;
+					deployed = true;
 				} catch (deployErr) {
-					console.error('Vercel standalone deploy failed, falling back:', deployErr);
+					console.warn('Standalone deploy skipped/failed:', deployErr.message);
+				}
+
+				// 2. If standalone project creation is restricted, register domain alias on main project
+				if (!deployed) {
+					try {
+						const domainEndpoint = teamId
+							? `https://api.vercel.com/v10/projects/playstore-web-143/domains?teamId=${encodeURIComponent(teamId)}`
+							: 'https://api.vercel.com/v10/projects/playstore-web-143/domains';
+						const domainRes = await fetch(domainEndpoint, {
+							method: 'POST',
+							headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
+							body: JSON.stringify({ name: `${slug}.vercel.app` }),
+						});
+						if (domainRes.ok || domainRes.status === 409) {
+							liveUrl = `https://${slug}.vercel.app`;
+							deployed = true;
+						}
+					} catch (domainErr) {
+						console.error('Domain alias creation error:', domainErr);
+					}
+				}
+
+				if (!deployed) {
 					liveUrl = `https://${host}/app/${slug}`;
 				}
 			} else {

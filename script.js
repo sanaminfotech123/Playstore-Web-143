@@ -24,6 +24,17 @@ async function loadPublishedApp() {
 		}
 	}
 
+	// Extract slug from subdomain hostname (e.g. abcde-7x9k2.vercel.app -> abcde-7x9k2)
+	if (!slug) {
+		const host = window.location.hostname.toLowerCase();
+		if (host.endsWith('.vercel.app')) {
+			const sub = host.replace('.vercel.app', '').split('.')[0];
+			if (sub && !sub.startsWith('playstore-web-143')) {
+				slug = sub;
+			}
+		}
+	}
+
 	function applyAppData(app) {
 		if (!app) return;
 		const name = app.name || appName || 'Mobile Banking';
