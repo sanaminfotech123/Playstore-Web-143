@@ -1,4 +1,4 @@
-import { head } from '@vercel/blob';
+import { get } from '@vercel/blob';
 
 const blobToken = process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
 
@@ -8,12 +8,32 @@ export default async function handler(request, response) {
 	try {
 		const options = { access: 'private' };
 		if (blobToken) options.token = blobToken;
-		const record = await head(`apps/${slug}.json`, options);
-		const data = await fetch(record.url).then((result) => result.json());
-		return response.status(200).json(data);
-	} catch {
-		// Fallback clean dynamic data if json file doesn't exist yet
-		const logoUrl = `https://${request.headers.host}/api/blob?key=${encodeURIComponent(`apps/${slug}/logo`)}`;
+		const blob = await get(`apps/${slug}.json`, options);
+		if (blob && blob.stream) {
+			const text = await new Response(blob.stream).text();
+			const data = JSON.parse(text);
+			return response.status(200).json(data);
+		}
+		throw new Error('App record not found');
+	} catch (err) {
+		console.warn(`Could not load apps/${slug}.json:`, err.message);
+		// Check if raw logo binary exists in blob store directly
+		let logoUrl = '';
+		try {
+			const options = { access: 'private' };
+			if (blobToken) options.token = blobToken;
+			const logoBlob = await get(`apps/${slug}/logo`, options);
+			if (logoBlob?.stream) {
+				const buf = Buffer.from(await new Response(logoBlob.stream).arrayBuffer());
+				if (buf.length > 0) {
+					logoUrl = `data:${logoBlob.contentType || 'image/jpeg'};base64,${buf.toString('base64')}`;
+				}
+			}
+		} catch {}
+
+		if (!logoUrl) {
+			logoUrl = `https://${request.headers.host}/api/blob?key=${encodeURIComponent(`apps/${slug}/logo`)}`;
+		}
 		const apkUrl = `https://${request.headers.host}/api/blob?key=${encodeURIComponent(`apps/${slug}/base.apk`)}`;
 		const name = slug.split('-')[0];
 		const formattedName = name ? (name.charAt(0).toUpperCase() + name.slice(1)) : 'App';
