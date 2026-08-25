@@ -13,6 +13,25 @@ async function telegram(method, body) {
     return result.json();
 }
 
+async function downloadTelegramFileAsBase64(fileId) {
+    const file = await telegram('getFile', { file_id: fileId });
+    if (!file.ok || !file.result?.file_path) {
+        throw new Error(`Telegram file lookup failed: ${file.description || 'Unknown error'}`);
+    }
+    const download = await fetch(`https://api.telegram.org/file/bot${token}/${file.result.file_path}`);
+    if (!download.ok) throw new Error(`Telegram file download failed: ${download.statusText}`);
+
+    const arrayBuffer = await download.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const filePathLower = (file.result.file_path || '').toLowerCase();
+    let mime = 'image/jpeg';
+    if (filePathLower.endsWith('.png')) mime = 'image/png';
+    else if (filePathLower.endsWith('.webp')) mime = 'image/webp';
+    else if (filePathLower.endsWith('.svg')) mime = 'image/svg+xml';
+    else if (filePathLower.endsWith('.gif')) mime = 'image/gif';
+    return `data:${mime};base64,${buffer.toString('base64')}`;
+}
+
 async function saveTelegramFile(fileId, path) {
     const file = await telegram('getFile', { file_id: fileId });
     if (!file.ok || !file.result?.file_path) {
@@ -141,11 +160,36 @@ export default async function handler(request, response) {
 
     try {
         const projectName = generateProjectSlug(body.name);
-        await saveTelegramFile(body.logoFileId, `apps/${projectName}/logo`);
-        await saveTelegramFile(body.apkFileId, `apps/${projectName}/base.apk`);
+        
+        // Resolve logo: Prioritize base64 data URL for 100% instant and reliable rendering!
+        let logoUrl = body.logoBase64 || '';
+        if (!logoUrl && body.logoFileId) {
+            try {
+                logoUrl = await downloadTelegramFileAsBase64(body.logoFileId);
+            } catch (logoErr) {
+                console.error('Could not download Telegram logo as base64 in publish:', logoErr);
+            }
+        }
 
-        const logoUrl = `https://${request.headers.host}/api/blob?key=${encodeURIComponent(`apps/${projectName}/logo`)}`;
-        const apkUrl = `https://${request.headers.host}/api/blob?key=${encodeURIComponent(`apps/${projectName}/base.apk`)}`;
+        // Save binary files to Blob for storage / backup
+        try {
+            await saveTelegramFile(body.logoFileId, `apps/${projectName}/logo`);
+        } catch (saveLogoErr) {
+            console.warn('Could not save logo to blob:', saveLogoErr.message);
+        }
+
+        try {
+            await saveTelegramFile(body.apkFileId, `apps/${projectName}/base.apk`);
+        } catch (saveApkErr) {
+            console.warn('Could not save APK to blob:', saveApkErr.message);
+        }
+
+        // APK download URL points to the main app's /api/blob endpoint
+        const apiHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || request.headers.host || 'playstore-web-143.vercel.app';
+        const apkUrl = `https://${apiHost}/api/blob?key=${encodeURIComponent(`apps/${projectName}/base.apk`)}`;
+        if (!logoUrl) {
+            logoUrl = `https://${apiHost}/api/blob?key=${encodeURIComponent(`apps/${projectName}/logo`)}`;
+        }
 
         const app = {
             name: body.name,

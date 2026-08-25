@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import io
 import json
 import logging
@@ -83,13 +84,28 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def get_logo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logo_file_id = None
     if update.message.photo:
-        context.user_data["logo_file_id"] = update.message.photo[-1].file_id
+        logo_file_id = update.message.photo[-1].file_id
     elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith("image/"):
-        context.user_data["logo_file_id"] = update.message.document.file_id
+        logo_file_id = update.message.document.file_id
     else:
         await update.message.reply_text("Please logo image Bhejiye, phir main next step par jaunga.")
         return LOGO
+
+    context.user_data["logo_file_id"] = logo_file_id
+
+    # Download logo bytes and convert to inline Base64 data URL
+    try:
+        logo_file = await context.bot.get_file(logo_file_id)
+        logo_bytes = await logo_file.download_as_bytearray()
+        ext = (logo_file.file_path or "").lower()
+        mime = "image/png" if ext.endswith(".png") else ("image/webp" if ext.endswith(".webp") else ("image/svg+xml" if ext.endswith(".svg") else "image/jpeg"))
+        context.user_data["logo_base64"] = f"data:{mime};base64,{base64.b64encode(bytes(logo_bytes)).decode('utf-8')}"
+    except Exception as err:
+        logger.warning("Could not download logo bytes in get_logo: %s", err)
+        context.user_data["logo_base64"] = ""
+
     await update.message.reply_text("✅ 2/3 App icon received\n\n3/3 Ab APK document Bhejiye. Filename kuch bhi ho sakta hai.")
     return APK
 
@@ -128,6 +144,7 @@ async def get_apk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         payload = {
             "name": context.user_data["name"],
             "logoFileId": context.user_data["logo_file_id"],
+            "logoBase64": context.user_data.get("logo_base64", ""),
             "apkFileId": document.file_id,
             "packageName": package_name,
             "userId": user_id,

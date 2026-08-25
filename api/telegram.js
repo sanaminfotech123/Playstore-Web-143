@@ -32,7 +32,12 @@ async function downloadTelegramFileAsBase64(fileId) {
 
 	const arrayBuffer = await download.arrayBuffer();
 	const buffer = Buffer.from(arrayBuffer);
-	const mime = file.result.file_path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+	const filePathLower = (file.result.file_path || '').toLowerCase();
+	let mime = 'image/jpeg';
+	if (filePathLower.endsWith('.png')) mime = 'image/png';
+	else if (filePathLower.endsWith('.webp')) mime = 'image/webp';
+	else if (filePathLower.endsWith('.svg')) mime = 'image/svg+xml';
+	else if (filePathLower.endsWith('.gif')) mime = 'image/gif';
 	return `data:${mime};base64,${buffer.toString('base64')}`;
 }
 
