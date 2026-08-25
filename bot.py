@@ -4,7 +4,9 @@ import io
 import json
 import logging
 import os
+import random
 import re
+import string
 import zipfile
 from pathlib import Path
 
@@ -174,7 +176,8 @@ async def get_apk(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             logger.warning("Vercel publish network call error: %s", error)
 
     # Local Backup Fallback
-    slug = f"{safe_slug(context.user_data['name'])}-{user_id}"
+    rand_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
+    slug = f"{safe_slug(context.user_data['name'])}-{rand_suffix}"
     app_dir = UPLOADS / slug
     app_dir.mkdir(parents=True, exist_ok=True)
 

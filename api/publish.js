@@ -51,7 +51,7 @@ function generateProjectSlug(value) {
         .trim()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
-        .slice(0, 20) || 'app';
+        .slice(0, 25) || 'app';
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     const rand = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     return `${clean}-${rand}`;
