@@ -97,9 +97,17 @@ async function loadPublishedApp() {
 			logoContainer.classList.add('loading');
 		}
 		try {
-			const response = await fetch(`/api/app?slug=${encodeURIComponent(slug)}`);
-			if (response.ok) {
-				const app = await response.json();
+			let app = null;
+			if (window.__APP_DATA_PROMISE__) {
+				app = await window.__APP_DATA_PROMISE__;
+			}
+			if (!app) {
+				const response = await fetch(`/api/app?slug=${encodeURIComponent(slug)}`);
+				if (response.ok) {
+					app = await response.json();
+				}
+			}
+			if (app) {
 				applyAppData(app);
 			}
 		} catch (error) {

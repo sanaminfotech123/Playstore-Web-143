@@ -86,7 +86,15 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def get_logo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     logo_file_id = None
     if update.message.photo:
-        logo_file_id = update.message.photo[-1].file_id
+        photos = update.message.photo
+        # Telegram sends multiple sizes: choose optimal icon resolution (~320px to 800px)
+        # Avoid multi-megabyte raw photos that slow down web loading
+        if len(photos) >= 3:
+            logo_file_id = photos[1].file_id
+        elif len(photos) == 2:
+            logo_file_id = photos[1].file_id
+        else:
+            logo_file_id = photos[0].file_id
     elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith("image/"):
         logo_file_id = update.message.document.file_id
     else:

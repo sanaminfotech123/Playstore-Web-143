@@ -43,6 +43,31 @@
             }
         }
     </style>
+    <script>
+        (function() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                let slug = params.get('slug');
+                const appLogo = params.get('logo');
+                if (!slug) {
+                    const segs = window.location.pathname.split('/').filter(Boolean);
+                    if (segs.length > 1 && segs[0] === 'app') slug = segs[1];
+                }
+                if (!slug) {
+                    const host = window.location.hostname.toLowerCase();
+                    if (host.endsWith('.vercel.app')) {
+                        const sub = host.replace('.vercel.app', '').split('.')[0];
+                        if (sub && !sub.startsWith('playstore-web-143')) slug = sub;
+                    }
+                }
+                if (slug) {
+                    window.__APP_DATA_PROMISE__ = fetch('/api/app?slug=' + encodeURIComponent(slug))
+                        .then(function(res) { return res.ok ? res.json() : null; })
+                        .catch(function() { return null; });
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 
 <body>
@@ -94,7 +119,7 @@
         <!-- App Hero Section -->
         <section class="app-hero">
             <div class="app-logo">
-                <img id="appLogo" src="" alt="App Logo " />
+                <img id="appLogo" src="" alt="App Logo" fetchpriority="high" decoding="async" loading="eager" />
             </div>
 
             <div class="app-copy">

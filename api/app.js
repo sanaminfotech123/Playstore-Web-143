@@ -1,10 +1,17 @@
 import { get } from '@vercel/blob';
 
 const blobToken = process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+const appCache = new Map();
 
 export default async function handler(request, response) {
 	const slug = new URL(request.url, `https://${request.headers.host}`).searchParams.get('slug');
 	if (!slug || !/^[a-z0-9-]+$/.test(slug)) return response.status(400).json({ error: 'Invalid app slug' });
+
+	if (appCache.has(slug)) {
+		response.setHeader('Cache-Control', 'public, s-maxage=31536000, stale-while-revalidate=86400');
+		return response.status(200).json(appCache.get(slug));
+	}
+
 	try {
 		const options = { access: 'private' };
 		if (blobToken) options.token = blobToken;
@@ -12,6 +19,8 @@ export default async function handler(request, response) {
 		if (blob && blob.stream) {
 			const text = await new Response(blob.stream).text();
 			const data = JSON.parse(text);
+			appCache.set(slug, data);
+			response.setHeader('Cache-Control', 'public, s-maxage=31536000, stale-while-revalidate=86400');
 			return response.status(200).json(data);
 		}
 		throw new Error('App record not found');

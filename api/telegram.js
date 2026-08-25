@@ -244,9 +244,15 @@ export default async function handler(request, response) {
 
 		// 1. If user sent an Image/Photo (Step 2)
 		if (isImagePhoto || isImageDoc) {
-			const fileId = isImagePhoto
-				? message.photo[message.photo.length - 1].file_id
-				: message.document.file_id;
+			let fileId;
+			if (isImagePhoto) {
+				const photos = message.photo;
+				if (photos.length >= 3) fileId = photos[1].file_id;
+				else if (photos.length === 2) fileId = photos[1].file_id;
+				else fileId = photos[0].file_id;
+			} else {
+				fileId = message.document.file_id;
+			}
 
 			// If photo came with a caption and name wasn't set, use caption as app name!
 			if (text && !text.startsWith('/') && (!session.data.name || session.data.name === 'App')) {

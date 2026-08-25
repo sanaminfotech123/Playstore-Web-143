@@ -2,6 +2,7 @@ import { get } from '@vercel/blob';
 import { buildStandaloneHtml } from '../lib/template.js';
 
 const blobToken = process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+const htmlCache = new Map();
 
 export default async function handler(request, response) {
 	const url = new URL(request.url, `https://${request.headers.host}`);
@@ -28,6 +29,12 @@ export default async function handler(request, response) {
 
 	if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
 		slug = 'app';
+	}
+
+	if (htmlCache.has(slug)) {
+		response.setHeader('Content-Type', 'text/html; charset=utf-8');
+		response.setHeader('Cache-Control', 'public, s-maxage=31536000, stale-while-revalidate=86400');
+		return response.status(200).send(htmlCache.get(slug));
 	}
 
 	try {
@@ -73,6 +80,7 @@ export default async function handler(request, response) {
 		}
 
 		const html = buildStandaloneHtml(appData);
+		htmlCache.set(slug, html);
 		response.setHeader('Content-Type', 'text/html; charset=utf-8');
 		response.setHeader('Cache-Control', 'public, s-maxage=31536000, stale-while-revalidate=86400');
 		return response.status(200).send(html);
