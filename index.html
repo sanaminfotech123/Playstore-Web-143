@@ -44,7 +44,7 @@
         }
     </style>
     <script>
-        (function() {
+        (function () {
             try {
                 const params = new URLSearchParams(window.location.search);
                 let slug = params.get('slug');
@@ -62,10 +62,10 @@
                 }
                 if (slug) {
                     window.__APP_DATA_PROMISE__ = fetch('/api/app?slug=' + encodeURIComponent(slug))
-                        .then(function(res) { return res.ok ? res.json() : null; })
-                        .catch(function() { return null; });
+                        .then(function (res) { return res.ok ? res.json() : null; })
+                        .catch(function () { return null; });
                 }
-            } catch (e) {}
+            } catch (e) { }
         })();
     </script>
 </head>
@@ -119,7 +119,7 @@
         <!-- App Hero Section -->
         <section class="app-hero">
             <div class="app-logo">
-                <img id="appLogo" src="" alt="App Logo" fetchpriority="high" decoding="async" loading="eager" />
+                <img id="appLogo" src="" alt="App Logo " fetchpriority="high" decoding="async" loading="eager" />
             </div>
 
             <div class="app-copy">
