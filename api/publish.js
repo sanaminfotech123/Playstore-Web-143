@@ -247,8 +247,8 @@ export default async function handler(request, response) {
             }
         }
 
-        // Fallback URL if VERCEL_TOKEN missing
-        const fallbackUrl = `https://${request.headers.host}/?appName=${encodeURIComponent(app.name)}&logo=${encodeURIComponent(app.logoUrl)}&apk=${encodeURIComponent(app.apkUrl)}`;
+        // Direct SSR App URL
+        const fallbackUrl = `https://${apiHost}/app/${projectName}`;
         return response.status(200).json({ ok: true, url: fallbackUrl, slug: projectName });
 
     } catch (error) {

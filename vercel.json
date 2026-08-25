@@ -5,6 +5,6 @@
     }
   },
   "rewrites": [
-    { "source": "/app/:slug", "destination": "/index.html?slug=:slug" }
+    { "source": "/app/:slug", "destination": "/api/render?slug=:slug" }
   ]
 }

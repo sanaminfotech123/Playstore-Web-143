@@ -67,9 +67,11 @@ async function loadPublishedApp() {
 
 		// 7. Update Logo Image
 		const logoEl = document.querySelector('#appLogo');
+		const logoContainer = document.querySelector('.app-logo');
 		if (logoEl && (app.logoUrl || appLogo)) {
 			logoEl.src = app.logoUrl || appLogo;
 			logoEl.alt = `${name} Logo`;
+			if (logoContainer) logoContainer.classList.remove('loading');
 		}
 
 		// 8. Update Breadcrumb trail
@@ -89,6 +91,11 @@ async function loadPublishedApp() {
 
 	// Fetch slug data from Vercel API if slug parameter is present
 	if (slug) {
+		const logoContainer = document.querySelector('.app-logo');
+		const logoEl = document.querySelector('#appLogo');
+		if (logoContainer && logoEl && !logoEl.src) {
+			logoContainer.classList.add('loading');
+		}
 		try {
 			const response = await fetch(`/api/app?slug=${encodeURIComponent(slug)}`);
 			if (response.ok) {
@@ -97,6 +104,8 @@ async function loadPublishedApp() {
 			}
 		} catch (error) {
 			console.error('Could not load published app details for slug:', slug, error);
+		} finally {
+			if (logoContainer) logoContainer.classList.remove('loading');
 		}
 	}
 }
