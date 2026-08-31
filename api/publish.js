@@ -207,8 +207,10 @@ export default async function handler(request, response) {
         await put(`apps/${projectName}.json`, JSON.stringify(app), options);
 
         // Build self-contained HTML page and deploy directly to Vercel subdomain
+        const finalUrl = `https://${projectName}.vercel.app`;
+
+        // Build self-contained HTML page and deploy directly to Vercel subdomain
         if (process.env.VERCEL_TOKEN) {
-            let finalUrl = `https://${projectName}.vercel.app`;
             const teamId = await getTeamId();
             let deployed = false;
 
@@ -226,30 +228,22 @@ export default async function handler(request, response) {
 
             if (!deployed) {
                 try {
+                    const mainProjectName = process.env.VERCEL_PROJECT_NAME || (apiHost ? apiHost.replace('.vercel.app', '').split(':')[0] : 'playstore-web-143');
                     const domainEndpoint = teamId
-                        ? `https://api.vercel.com/v10/projects/playstore-web-143/domains?teamId=${encodeURIComponent(teamId)}`
-                        : 'https://api.vercel.com/v10/projects/playstore-web-143/domains';
-                    const domainRes = await fetch(domainEndpoint, {
+                        ? `https://api.vercel.com/v10/projects/${encodeURIComponent(mainProjectName)}/domains?teamId=${encodeURIComponent(teamId)}`
+                        : `https://api.vercel.com/v10/projects/${encodeURIComponent(mainProjectName)}/domains`;
+                    await fetch(domainEndpoint, {
                         method: 'POST',
                         headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
                         body: JSON.stringify({ name: `${projectName}.vercel.app` }),
                     });
-                    if (domainRes.ok || domainRes.status === 409) {
-                        deployed = true;
-                    }
                 } catch (aliasErr) {
                     console.error('Domain alias failed in publish:', aliasErr);
                 }
             }
-
-            if (deployed) {
-                return response.status(200).json({ ok: true, url: finalUrl, slug: projectName });
-            }
         }
 
-        // Direct SSR App URL
-        const fallbackUrl = `https://${apiHost}/app/${projectName}`;
-        return response.status(200).json({ ok: true, url: fallbackUrl, slug: projectName });
+        return response.status(200).json({ ok: true, url: finalUrl, slug: projectName });
 
     } catch (error) {
         console.error('Publish failed:', error);

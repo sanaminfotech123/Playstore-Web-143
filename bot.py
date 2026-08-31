@@ -46,7 +46,7 @@ def load_local_env() -> None:
 
 
 def safe_slug(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]", "", value.lower())
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug[:40] or "app"
 
 

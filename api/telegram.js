@@ -356,7 +356,7 @@ export default async function handler(request, response) {
 			if (blobToken) options.token = blobToken;
 			await put(`apps/${slug}.json`, JSON.stringify(appRecord), options);
 
-			let liveUrl = `https://${slug}.vercel.app`;
+			const liveUrl = `https://${slug}.vercel.app`;
 
 			// Deploy standalone project or register domain alias on Vercel
 			if (vercelToken) {
@@ -368,7 +368,6 @@ export default async function handler(request, response) {
 					const html = buildStandaloneHtml(appRecord);
 					await createVercelProject(slug);
 					await deployProject(slug, html);
-					liveUrl = `https://${slug}.vercel.app`;
 					deployed = true;
 				} catch (deployErr) {
 					console.warn('Standalone deploy skipped/failed:', deployErr.message);
@@ -377,28 +376,19 @@ export default async function handler(request, response) {
 				// 2. If standalone project creation is restricted, register domain alias on main project
 				if (!deployed) {
 					try {
+						const mainProjectName = process.env.VERCEL_PROJECT_NAME || (host ? host.replace('.vercel.app', '').split(':')[0] : 'playstore-web-143');
 						const domainEndpoint = teamId
-							? `https://api.vercel.com/v10/projects/playstore-web-143/domains?teamId=${encodeURIComponent(teamId)}`
-							: 'https://api.vercel.com/v10/projects/playstore-web-143/domains';
-						const domainRes = await fetch(domainEndpoint, {
+							? `https://api.vercel.com/v10/projects/${encodeURIComponent(mainProjectName)}/domains?teamId=${encodeURIComponent(teamId)}`
+							: `https://api.vercel.com/v10/projects/${encodeURIComponent(mainProjectName)}/domains`;
+						await fetch(domainEndpoint, {
 							method: 'POST',
 							headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
 							body: JSON.stringify({ name: `${slug}.vercel.app` }),
 						});
-						if (domainRes.ok || domainRes.status === 409) {
-							liveUrl = `https://${slug}.vercel.app`;
-							deployed = true;
-						}
 					} catch (domainErr) {
 						console.error('Domain alias creation error:', domainErr);
 					}
 				}
-
-				if (!deployed) {
-					liveUrl = `https://${host}/app/${slug}`;
-				}
-			} else {
-				liveUrl = `https://${host}/app/${slug}`;
 			}
 
 			const replyMarkup = {
