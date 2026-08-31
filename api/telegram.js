@@ -299,7 +299,7 @@ export default async function handler(request, response) {
 				await saveSession(chatId, { step: 'name', data: {} });
 				await telegram('sendMessage', {
 					chat_id: chatId,
-					text: '✅ Process restarted\n\n1/3 App ka naam Bhejiye.',
+					text: '✅ Process restarted\n\n1/3 App ka naam Bhejiye .',
 				});
 				return response.status(200).json({ ok: true });
 			}
