@@ -55,14 +55,23 @@ async function saveTelegramFile(fileId, path) {
 	return blob.url;
 }
 
+const sessionCache = new Map();
+
 async function loadSession(chatId) {
+	const key = String(chatId);
+	if (sessionCache.has(key)) {
+		const mem = sessionCache.get(key);
+		if (mem && mem.data) return mem;
+	}
 	try {
 		const options = { access: 'private' };
 		if (blobToken) options.token = blobToken;
 		const blob = await get(`sessions/${chatId}.json`, options);
 		if (blob?.stream) {
 			const text = await new Response(blob.stream).text();
-			return JSON.parse(text);
+			const parsed = JSON.parse(text);
+			sessionCache.set(key, parsed);
+			return parsed;
 		}
 	} catch (err) {
 		// Session doesn't exist yet or Blob error
@@ -71,6 +80,8 @@ async function loadSession(chatId) {
 }
 
 async function saveSession(chatId, session) {
+	const key = String(chatId);
+	sessionCache.set(key, session);
 	try {
 		const options = { access: 'private', addRandomSuffix: false, allowOverwrite: true };
 		if (blobToken) options.token = blobToken;
@@ -235,7 +246,7 @@ export default async function handler(request, response) {
 			await saveSession(chatId, { step: 'name', data: {} });
 			await telegram('sendMessage', {
 				chat_id: chatId,
-				text: '✅ Process started\n\n1/3 App ka naam Bhejiye (e.g. abcde,qwert).',
+				text: '✅ Process started\n\n1/3 App ka naam Bhejiye.',
 			});
 			return response.status(200).json({ ok: true });
 		}
@@ -269,14 +280,11 @@ export default async function handler(request, response) {
 			}
 			session.data.logoUrl = await saveTelegramFile(fileId, `apps/${chatId}/logo`);
 			session.step = 'apk';
-			if (!session.data.name) {
-				session.data.name = 'abcde';
-				session.data.developer = 'abcde Official';
-			}
 			await saveSession(chatId, session);
+			const displayName = session.data.name ? ` for [${session.data.name}]` : '';
 			await telegram('sendMessage', {
 				chat_id: chatId,
-				text: `✅ 2/3 App logo received for [${session.data.name}]\n\n3/3 Ab APK document bhejiye (.apk file).`,
+				text: `✅ 2/3 App logo received${displayName}\n\n3/3 Ab APK document bhejiye (.apk file).`,
 			});
 			return response.status(200).json({ ok: true });
 		}
@@ -289,7 +297,11 @@ export default async function handler(request, response) {
 				session.data.developer = `${text} Official`;
 			}
 
-			const appName = session.data.name || 'abcde';
+			const docCleanName = (message?.document?.file_name || '')
+				.replace(/\.apk$/i, '')
+				.replace(/[^a-zA-Z0-9\s_-]/g, '')
+				.trim();
+			const appName = session.data.name || docCleanName || 'App';
 			const slug = generateProjectSlug(appName);
 			await telegram('sendMessage', {
 				chat_id: chatId,
@@ -405,6 +417,7 @@ export default async function handler(request, response) {
 			});
 
 			try {
+				sessionCache.delete(String(chatId));
 				if (blobToken) options.token = blobToken;
 				await del(`sessions/${chatId}.json`, options);
 			} catch { }
