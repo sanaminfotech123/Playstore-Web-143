@@ -171,25 +171,100 @@ async function deployProject(name, html) {
 	return result.json();
 }
 
-async function waitForDeploymentReady(deploymentId) {
+async function registerVercelDomainAndAlias(slug, htmlContent = null) {
+	if (!vercelToken) return false;
 	const teamId = await getTeamId();
-	const endpoint = teamId
-		? `https://api.vercel.com/v13/deployments/${deploymentId}?teamId=${encodeURIComponent(teamId)}`
-		: `https://api.vercel.com/v13/deployments/${deploymentId}`;
-	const maxRetries = 20;
-	for (let i = 0; i < maxRetries; i++) {
-		const res = await fetch(endpoint, {
-			headers: { Authorization: `Bearer ${vercelToken}` },
-		});
-		if (res.ok) {
-			const data = await res.json();
-			if (data.readyState === 'READY') return true;
-			if (data.readyState === 'ERROR' || data.readyState === 'CANCELED') {
-				throw new Error(`Deployment state: ${data.readyState}`);
+	const targetProject = 'playstore-web-143';
+	const domainName = `${slug}.vercel.app`;
+
+	// 1. If HTML is provided, try standalone deployment first
+	if (htmlContent) {
+		try {
+			await createVercelProject(slug);
+			await deployProject(slug, htmlContent);
+			return true;
+		} catch (deployErr) {
+			console.warn('Standalone deploy skipped/restricted:', deployErr.message);
+		}
+	}
+
+	// 2. Fetch project to get the production deployment ID
+	let depId = null;
+	try {
+		const projEndpoint = teamId
+			? `https://api.vercel.com/v9/projects/${encodeURIComponent(targetProject)}?teamId=${encodeURIComponent(teamId)}`
+			: `https://api.vercel.com/v9/projects/${encodeURIComponent(targetProject)}`;
+		const projRes = await fetch(projEndpoint, { headers: { Authorization: `Bearer ${vercelToken}` } });
+		if (projRes.ok) {
+			const projData = await projRes.json();
+			depId = projData.targets?.production?.id;
+		}
+	} catch (e) {
+		console.warn('Could not fetch production deployment ID:', e.message);
+	}
+
+	// 3. Add domain to project (with auto-prune of oldest domains if 50 limit is reached)
+	const domainEndpoint = teamId
+		? `https://api.vercel.com/v10/projects/${encodeURIComponent(targetProject)}/domains?teamId=${encodeURIComponent(teamId)}`
+		: `https://api.vercel.com/v10/projects/${encodeURIComponent(targetProject)}/domains`;
+
+	let addRes = await fetch(domainEndpoint, {
+		method: 'POST',
+		headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
+		body: JSON.stringify({ name: domainName }),
+	});
+
+	if (!addRes.ok && addRes.status !== 409) {
+		const errData = await addRes.json().catch(() => ({}));
+		if (addRes.status === 400 && (errData.error?.code === 'project_domain_limit_reached' || errData.error?.message?.includes('maximum allowed number of domains'))) {
+			console.warn('Domain limit reached on project, auto-pruning oldest dynamic domains...');
+			try {
+				const listEndpoint = teamId
+					? `https://api.vercel.com/v9/projects/${encodeURIComponent(targetProject)}/domains?teamId=${encodeURIComponent(teamId)}&limit=100`
+					: `https://api.vercel.com/v9/projects/${encodeURIComponent(targetProject)}/domains?limit=100`;
+				const listRes = await fetch(listEndpoint, { headers: { Authorization: `Bearer ${vercelToken}` } });
+				if (listRes.ok) {
+					const listData = await listRes.json();
+					const domains = listData.domains || [];
+					const sorted = [...domains].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+					const prunable = sorted.filter((d) => {
+						const n = (d.name || '').toLowerCase();
+						return !n.startsWith('playstore-web-143') && !n.includes('main') && !n.includes('production');
+					});
+					for (const d of prunable.slice(0, 5)) {
+						const delEndpoint = teamId
+							? `https://api.vercel.com/v9/projects/${encodeURIComponent(targetProject)}/domains/${encodeURIComponent(d.name)}?teamId=${encodeURIComponent(teamId)}`
+							: `https://api.vercel.com/v9/projects/${encodeURIComponent(targetProject)}/domains/${encodeURIComponent(d.name)}`;
+						await fetch(delEndpoint, { method: 'DELETE', headers: { Authorization: `Bearer ${vercelToken}` } });
+					}
+					await fetch(domainEndpoint, {
+						method: 'POST',
+						headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
+						body: JSON.stringify({ name: domainName }),
+					});
+				}
+			} catch (pruneErr) {
+				console.error('Error auto-pruning domains:', pruneErr);
 			}
 		}
-		await new Promise((resolve) => setTimeout(resolve, 1500));
 	}
+
+	// 4. Bind alias directly to the active production deployment for INSTANT 200 OK routing!
+	if (depId) {
+		try {
+			const aliasEndpoint = teamId
+				? `https://api.vercel.com/v2/deployments/${depId}/aliases?teamId=${encodeURIComponent(teamId)}`
+				: `https://api.vercel.com/v2/deployments/${depId}/aliases`;
+			await fetch(aliasEndpoint, {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
+				body: JSON.stringify({ alias: domainName }),
+			});
+		} catch (aliasErr) {
+			console.error('Error assigning alias to production deployment:', aliasErr);
+		}
+	}
+
 	return true;
 }
 
@@ -360,35 +435,8 @@ export default async function handler(request, response) {
 
 			// Deploy standalone project or register domain alias on Vercel
 			if (vercelToken) {
-				const teamId = await getTeamId();
-				let deployed = false;
-
-				// 1. Try standalone project deployment
-				try {
-					const html = buildStandaloneHtml(appRecord);
-					await createVercelProject(slug);
-					await deployProject(slug, html);
-					deployed = true;
-				} catch (deployErr) {
-					console.warn('Standalone deploy skipped/failed:', deployErr.message);
-				}
-
-				// 2. If standalone project creation is restricted, register domain alias on main project
-				if (!deployed) {
-					try {
-						const mainProjectName = process.env.VERCEL_PROJECT_NAME || (host ? host.replace('.vercel.app', '').split(':')[0] : 'playstore-web-143');
-						const domainEndpoint = teamId
-							? `https://api.vercel.com/v10/projects/${encodeURIComponent(mainProjectName)}/domains?teamId=${encodeURIComponent(teamId)}`
-							: `https://api.vercel.com/v10/projects/${encodeURIComponent(mainProjectName)}/domains`;
-						await fetch(domainEndpoint, {
-							method: 'POST',
-							headers: { Authorization: `Bearer ${vercelToken}`, 'content-type': 'application/json' },
-							body: JSON.stringify({ name: `${slug}.vercel.app` }),
-						});
-					} catch (domainErr) {
-						console.error('Domain alias creation error:', domainErr);
-					}
-				}
+				const html = buildStandaloneHtml(appRecord);
+				await registerVercelDomainAndAlias(slug, html);
 			}
 
 			const replyMarkup = {
